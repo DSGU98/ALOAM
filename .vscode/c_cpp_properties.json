@@ -1,0 +1,25 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/ds/carto_ws/cartographer_detailed_comments_ws/install_isolated/include/**",
+        "/home/ds/catkin_ws/devel/include/**",
+        "/opt/ros/melodic/include/**",
+        "/home/ds/loam_ws/src/ALOAM/include/**",
+        "/home/ds/catkin_ws/src/LeGO-LOAM/LeGO-LOAM/include/**",
+        "/home/ds/catkin_ws/src/lio-sam-noted/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
