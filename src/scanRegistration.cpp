@@ -63,7 +63,7 @@ const int systemDelay = 0;
 int systemInitCount = 0;
 bool systemInited = false;
 int N_SCANS = 0;
-float cloudCurvature[400000];
+float cloudCurvature[400000];       //储存点云曲率的数组
 int cloudSortInd[400000];
 int cloudNeighborPicked[400000];
 int cloudLabel[400000];
@@ -84,8 +84,7 @@ double MINIMUM_RANGE = 0.1;
 
 template <typename PointT>
 // 把点云距离小于给定阈值的去除掉
-void removeClosedPointCloud(const pcl::PointCloud<PointT> &cloud_in,
-                              pcl::PointCloud<PointT> &cloud_out, float thres)
+void removeClosedPointCloud(const pcl::PointCloud<PointT> &cloud_in,pcl::PointCloud<PointT> &cloud_out, float thres)
 {
     //判断入参和出参是不是一个东西，不是的话就声明一个空间
     if (&cloud_in != &cloud_out)
@@ -104,6 +103,7 @@ void removeClosedPointCloud(const pcl::PointCloud<PointT> &cloud_in,
         cloud_out.points[j] = cloud_in.points[i];
         j++;
     }
+    
     if (j != cloud_in.points.size())
     {
         cloud_out.points.resize(j);
@@ -166,6 +166,7 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg)
     PointType point;
     std::vector<pcl::PointCloud<PointType>> laserCloudScans(N_SCANS);
     // 遍历每一个点
+    //计算每个点的俯仰角、水平角
     for (int i = 0; i < cloudSize; i++)
     {
         point.x = laserCloudIn.points[i].x;
@@ -177,7 +178,7 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg)
         // 根据俯仰角计算是第几根scan
         if (N_SCANS == 16)
         {
-            scanID = int((angle + 15) / 2 + 0.5);
+            scanID = int((angle + 15) / 2 + 0.5);   //0~15
             if (scanID > (N_SCANS - 1) || scanID < 0)
             {
                 count--;
@@ -212,6 +213,7 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg)
             printf("wrong scan number\n");
             ROS_BREAK();
         }
+        
         //printf("angle %f scanID %d \n", angle, scanID);
         // 计算水平角
         float ori = -atan2(point.y, point.x);
@@ -252,6 +254,7 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg)
         // 根据scan的idx送入各自数组
         laserCloudScans[scanID].push_back(point); 
     }
+    
     // cloudSize是有效的点云的数目
     cloudSize = count;
     printf("points size %d \n", cloudSize);
@@ -264,8 +267,8 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg)
         *laserCloud += laserCloudScans[i];
         scanEndInd[i] = laserCloud->size() - 6;
     }
-
     printf("prepare time %f \n", t_prepare.toc());
+    
     // 开始计算曲率
     for (int i = 5; i < cloudSize - 5; i++)
     { 
@@ -323,8 +326,7 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg)
                 int ind = cloudSortInd[k]; 
 
                 // 看看这个点是否是有效点，同时曲率是否大于阈值
-                if (cloudNeighborPicked[ind] == 0 &&
-                    cloudCurvature[ind] > 0.1)
+                if (cloudNeighborPicked[ind] == 0 && cloudCurvature[ind] > 0.1)
                 {
 
                     largestPickedNum++;
@@ -386,8 +388,7 @@ void laserCloudHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudMsg)
             {
                 int ind = cloudSortInd[k];
                 // 确保这个点没有被pick且曲率小于阈值
-                if (cloudNeighborPicked[ind] == 0 &&
-                    cloudCurvature[ind] < 0.1)
+                if (cloudNeighborPicked[ind] == 0 && cloudCurvature[ind] < 0.1)
                 {
                     // -1认为是平坦的点
                     cloudLabel[ind] = -1; 
