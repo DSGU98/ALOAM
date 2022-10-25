@@ -176,7 +176,7 @@ void pointAssociateTobeMapped(PointType const *const pi, PointType *const po)
 // 回调函数中将消息都是送入各自队列
 void laserCloudCornerLastHandler(const sensor_msgs::PointCloud2ConstPtr &laserCloudCornerLast2)
 {
-	mBuf.lock();
+	mBuf.lock();		//加锁，一个回调函数是一个线程，后面还有主处理的线程，保证两个队列不会同时操作一个容器
 	cornerLastBuf.push(laserCloudCornerLast2);
 	mBuf.unlock();
 }
@@ -203,6 +203,7 @@ void laserOdometryHandler(const nav_msgs::Odometry::ConstPtr &laserOdometry)
 	mBuf.unlock();
 
 	// high frequence publish
+	//把ROS类型的消息转成Eigen类型消息
 	Eigen::Quaterniond q_wodom_curr;
 	Eigen::Vector3d t_wodom_curr;
 	q_wodom_curr.x() = laserOdometry->pose.pose.orientation.x;
@@ -212,7 +213,7 @@ void laserOdometryHandler(const nav_msgs::Odometry::ConstPtr &laserOdometry)
 	t_wodom_curr.x() = laserOdometry->pose.pose.position.x;
 	t_wodom_curr.y() = laserOdometry->pose.pose.position.y;
 	t_wodom_curr.z() = laserOdometry->pose.pose.position.z;
-
+ 
 	Eigen::Quaterniond q_w_curr = q_wmap_wodom * q_wodom_curr;
 	Eigen::Vector3d t_w_curr = q_wmap_wodom * t_wodom_curr + t_wmap_wodom; 
 

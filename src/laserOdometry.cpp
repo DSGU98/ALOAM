@@ -100,6 +100,7 @@ double para_t[3] = {0, 0, 0};
 Eigen::Map<Eigen::Quaterniond> q_last_curr(para_q);
 Eigen::Map<Eigen::Vector3d> t_last_curr(para_t);
 
+//std::queue 类是容器适配器
 std::queue<sensor_msgs::PointCloud2ConstPtr> cornerSharpBuf;
 std::queue<sensor_msgs::PointCloud2ConstPtr> cornerLessSharpBuf;
 std::queue<sensor_msgs::PointCloud2ConstPtr> surfFlatBuf;
@@ -149,9 +150,11 @@ void TransformToEnd(PointType const *const pi, PointType *const po)
     //Remove distortion time info
     po->intensity = int(pi->intensity);
 }
+
 // 操作都是送去各自的队列中
 void laserCloudSharpHandler(const sensor_msgs::PointCloud2ConstPtr &cornerPointsSharp2)
 {
+    //注意关于queue的任何添加、判断操作都需要用线程锁保护（若为单线程处理则不需要）
     mBuf.lock();
     cornerSharpBuf.push(cornerPointsSharp2);
     mBuf.unlock();
@@ -205,6 +208,7 @@ int main(int argc, char **argv)
 
     ros::Subscriber subLaserCloudFullRes = nh.subscribe<sensor_msgs::PointCloud2>("/velodyne_cloud_2", 100, laserCloudFullResHandler);
 
+    //这个节点要发布的topic
     ros::Publisher pubLaserCloudCornerLast = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_corner_last", 100);
 
     ros::Publisher pubLaserCloudSurfLast = nh.advertise<sensor_msgs::PointCloud2>("/laser_cloud_surf_last", 100);
@@ -235,7 +239,7 @@ int main(int argc, char **argv)
             timeSurfPointsFlat = surfFlatBuf.front()->header.stamp.toSec();
             timeSurfPointsLessFlat = surfLessFlatBuf.front()->header.stamp.toSec();
             timeLaserCloudFullRes = fullPointsBuf.front()->header.stamp.toSec();
-            // 因为同一帧的时间戳都是相同的，因此这里比较是否是同一帧
+            // 因为同一帧的时间戳都是相同的，因此这里比较是否是同一帧，统一和timeLaserCloudFullRes对比
             if (timeCornerPointsSharp != timeLaserCloudFullRes ||
                 timeCornerPointsLessSharp != timeLaserCloudFullRes ||
                 timeSurfPointsFlat != timeLaserCloudFullRes ||
@@ -270,41 +274,44 @@ int main(int argc, char **argv)
             TicToc t_whole;
             // initializing
             // 一个什么也不干的初始化
-            if (!systemInited)
+            if (!systemInited)      //只有第一次会进去，等有两帧了才行
             {
                 systemInited = true;
                 std::cout << "Initialization finished \n";
             }
             else
             {
-                // 取出比较突出的特征
-                int cornerPointsSharpNum = cornerPointsSharp->points.size();
-                int surfPointsFlatNum = surfPointsFlat->points.size();
+                // 取出比较突出的特征的大小
+                int cornerPointsSharpNum = cornerPointsSharp->points.size();        //角点
+                int surfPointsFlatNum = surfPointsFlat->points.size();              //面点
 
                 TicToc t_opt;
                 // 进行两次迭代
                 for (size_t opti_counter = 0; opti_counter < 2; ++opti_counter)
                 {
+                    //匹配对的数量
                     corner_correspondence = 0;
                     plane_correspondence = 0;
-
+ 
                     //ceres::LossFunction *loss_function = NULL;
-                    // 定义一下ceres的核函数
+                    // 定义一下ceres的核函数，核函数是删除outline 外点的一个有效的方法，当残差过大的时候就降低他的权重
+                    //0.1代表 残差大于0.1的点 ,则权重降低  小于0.1 则认为正常,不做特殊的处理
                     ceres::LossFunction *loss_function = new ceres::HuberLoss(0.1);
                     // 由于旋转不满足一般意义的加法，因此这里使用ceres自带的local param
-                    ceres::LocalParameterization *q_parameterization =
-                        new ceres::EigenQuaternionParameterization();
-                    ceres::Problem::Options problem_options;
+                    ceres::LocalParameterization *q_parameterization = 
+                                        new ceres::EigenQuaternionParameterization();
 
+                    ceres::Problem::Options problem_options;
                     ceres::Problem problem(problem_options);
+
                     // 待优化的变量是帧间位姿，平移和旋转，这里旋转使用四元数来表示
-                    problem.AddParameterBlock(para_q, 4, q_parameterization);
-                    problem.AddParameterBlock(para_t, 3);
+                    problem.AddParameterBlock(para_q, 4, q_parameterization);           //向问题中添加四元数残差参数项
+                    problem.AddParameterBlock(para_t, 3);               //添加三个平移的参数块
 
                     pcl::PointXYZI pointSel;
-                    std::vector<int> pointSearchInd;
-                    std::vector<float> pointSearchSqDis;
-
+                    std::vector<int> pointSearchInd;        //kdtree找到的最近邻点的id
+                    std::vector<float> pointSearchSqDis;            //kdtree找到的最近邻点的距离
+                    
                     TicToc t_data;
                     // find correspondence for corner features
                     // 寻找角点的约束
@@ -325,7 +332,7 @@ int main(int argc, char **argv)
 
                             double minPointSqDis2 = DISTANCE_SQ_THRESHOLD;
                             // search in the direction of increasing scan line
-                            // 寻找角点，在刚刚角点id上下分别继续寻找，目的是找到最近的角点，由于其按照线束进行排序，所以就是向上找
+                            // 寻找第二个角点，在刚刚角点id上下分别继续寻找，目的是找到最近的角点，由于其按照线束进行排序，所以先向上找
                             for (int j = closestPointInd + 1; j < (int)laserCloudCornerLast->points.size(); ++j)
                             {
                                 // if in the same scan line, continue
@@ -337,13 +344,10 @@ int main(int argc, char **argv)
                                 // 要求找到的线束距离当前线束不能太远
                                 if (int(laserCloudCornerLast->points[j].intensity) > (closestPointScanID + NEARBY_SCAN))
                                     break;
-                                // 计算和当前找到的角点之间的距离
-                                double pointSqDis = (laserCloudCornerLast->points[j].x - pointSel.x) *
-                                                        (laserCloudCornerLast->points[j].x - pointSel.x) +
-                                                    (laserCloudCornerLast->points[j].y - pointSel.y) *
-                                                        (laserCloudCornerLast->points[j].y - pointSel.y) +
-                                                    (laserCloudCornerLast->points[j].z - pointSel.z) *
-                                                        (laserCloudCornerLast->points[j].z - pointSel.z);
+                                // 计算和当前找到的角点之间的距离，即上一帧两个角点之间的距离
+                                double pointSqDis = (laserCloudCornerLast->points[j].x - pointSel.x) *(laserCloudCornerLast->points[j].x - pointSel.x)
+                                                                         +(laserCloudCornerLast->points[j].y - pointSel.y) * (laserCloudCornerLast->points[j].y - pointSel.y) 
+                                                                         + (laserCloudCornerLast->points[j].z - pointSel.z) *(laserCloudCornerLast->points[j].z - pointSel.z);
                                 // 寻找距离最小的角点及其索引
                                 if (pointSqDis < minPointSqDis2)
                                 {
@@ -355,7 +359,7 @@ int main(int argc, char **argv)
                             }
 
                             // search in the direction of decreasing scan line
-                            // 同样另一个方向寻找对应角点
+                            // 同样另一个方向寻找对应角点，对比看哪一线束的点离KD-Tree取出的点最近，取最近的这个点
                             for (int j = closestPointInd - 1; j >= 0; --j)
                             {
                                 // if in the same scan line, continue
@@ -384,22 +388,23 @@ int main(int argc, char **argv)
                         // 如果这个角点是有效的角点
                         if (minPointInd2 >= 0) // both closestPointInd and minPointInd2 is valid
                         {
-                            // 取出当前点和上一帧的两个角点
+                            // 取出当前点和上一帧的两个角点（距离当前帧最近的一个角点a  和  与最近的一个点距离最小的角点b）
                             Eigen::Vector3d curr_point(cornerPointsSharp->points[i].x,
-                                                       cornerPointsSharp->points[i].y,
-                                                       cornerPointsSharp->points[i].z);
+                                                                                        cornerPointsSharp->points[i].y,
+                                                                                        cornerPointsSharp->points[i].z);
                             Eigen::Vector3d last_point_a(laserCloudCornerLast->points[closestPointInd].x,
-                                                         laserCloudCornerLast->points[closestPointInd].y,
-                                                         laserCloudCornerLast->points[closestPointInd].z);
+                                                                                            laserCloudCornerLast->points[closestPointInd].y,
+                                                                                            laserCloudCornerLast->points[closestPointInd].z);
                             Eigen::Vector3d last_point_b(laserCloudCornerLast->points[minPointInd2].x,
-                                                         laserCloudCornerLast->points[minPointInd2].y,
-                                                         laserCloudCornerLast->points[minPointInd2].z);
-
+                                                                                            laserCloudCornerLast->points[minPointInd2].y,
+                                                                                            laserCloudCornerLast->points[minPointInd2].z);
+  
                             double s;
                             if (DISTORTION)
-                                s = (cornerPointsSharp->points[i].intensity - int(cornerPointsSharp->points[i].intensity)) / SCAN_PERIOD;
+                                s = (cornerPointsSharp->points[i].intensity - int(cornerPointsSharp->points[i].intensity)) / SCAN_PERIOD;           //当前点的时间戳占比
                             else
                                 s = 1.0;
+                            //用当前点和上一帧的两个角点构成约束
                             ceres::CostFunction *cost_function = LidarEdgeFactor::Create(curr_point, last_point_a, last_point_b, s);
                             problem.AddResidualBlock(cost_function, loss_function, para_q, para_t);
                             corner_correspondence++;
@@ -407,8 +412,10 @@ int main(int argc, char **argv)
                     }
 
                     // find correspondence for plane features
+                    // 寻找面点的约束
                     for (int i = 0; i < surfPointsFlatNum; ++i)
                     {
+                        //去运动畸变,统一到起始点
                         TransformToStart(&(surfPointsFlat->points[i]), &pointSel);
                         // 先寻找上一帧距离这个面点最近的面点
                         kdtreeSurfLast->nearestKSearch(pointSel, 1, pointSearchInd, pointSearchSqDis);
@@ -522,18 +529,22 @@ int main(int argc, char **argv)
                     {
                         printf("less correspondence! *************************************************\n");
                     }
+
                     // 调用ceres求解器求解
                     TicToc t_solver;
-                    ceres::Solver::Options options;
-                    options.linear_solver_type = ceres::DENSE_QR;
-                    options.max_num_iterations = 4;
-                    options.minimizer_progress_to_stdout = false;
-                    ceres::Solver::Summary summary;
-                    ceres::Solve(options, &problem, &summary);
+                    ceres::Solver::Options options;     //这里有很多配置项可以填
+                    options.linear_solver_type = ceres::DENSE_QR;       //增量方程如何求解
+                    options.max_num_iterations = 4;     //最大迭代次数
+                    options.minimizer_progress_to_stdout = false;   //不输出到cout
+                    ceres::Solver::Summary summary;     //优化信息
+                    ceres::Solve(options, &problem, &summary);      //开始优化
                     printf("solver time %f ms \n", t_solver.toc());
                 }
                 printf("optimization twice time %f \n", t_opt.toc());
+
+                
                 // 这里的w_curr 实际上是 w_last
+                //把计算的当前帧和上一帧的变换累加,形成相对第一帧的位姿变换,也就是世界坐标系下的位姿
                 t_w_curr = t_w_curr + q_w_curr * t_last_curr;
                 q_w_curr = q_w_curr * q_last_curr;
             }

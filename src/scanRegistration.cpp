@@ -82,6 +82,7 @@ bool PUB_EACH_LINE = false;
 
 double MINIMUM_RANGE = 0.1; 
 
+//函数模板
 template <typename PointT>
 // 把点云距离小于给定阈值的去除掉
 void removeClosedPointCloud(const pcl::PointCloud<PointT> &cloud_in,pcl::PointCloud<PointT> &cloud_out, float thres)
