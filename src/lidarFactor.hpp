@@ -10,13 +10,13 @@
 #include <pcl_conversions/pcl_conversions.h>
 
 //代价函数的计算模型
-struct LidarEdgeFactor
+struct LidarEdgeFactor		//struct的默认权限为公有public，class的默认权限为私有
 {
 	//构造函数
 	LidarEdgeFactor(Eigen::Vector3d curr_point_, Eigen::Vector3d last_point_a_,
 									    Eigen::Vector3d last_point_b_, double s_)
-				: curr_point(curr_point_), last_point_a(last_point_a_), 
-			last_point_b(last_point_b_), s(s_) {}
+					: curr_point(curr_point_), last_point_a(last_point_a_), 
+			last_point_b(last_point_b_), s(s_) {}			//用初始化列表方式赋值
 
 	//残差的计算
 	template <typename T>		//函数模板

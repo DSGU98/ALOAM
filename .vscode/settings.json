@@ -43,6 +43,7 @@
         "utility": "cpp",
         "variant": "cpp",
         "core": "cpp",
-        "*.txx": "cpp"
+        "*.txx": "cpp",
+        "algorithm": "cpp"
     }
 }
