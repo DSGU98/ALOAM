@@ -434,13 +434,13 @@ int main(int argc, char **argv)
                             // 额外在寻找两个点，要求，一个点和最近点同一个scan，另一个是不同scan
                             // search in the direction of increasing scan line
                             // 按照增量方向寻找其他面点
-                            for (int j = closestPointInd + 1; j < (int)laserCloudSurfLast->points.size(); ++j)
+                            for (int j = closestPointInd + 1; j < (int)laserCloudSurfLast->points.size(); ++j)      
                             {
                                 // if not in nearby scans, end the loop
                                 // 不能和当前找到的上一帧面点线束距离太远
                                 if (int(laserCloudSurfLast->points[j].intensity) > (closestPointScanID + NEARBY_SCAN))
                                     break;
-                                // 计算和当前帧该点距离
+                                // 计算和当前帧该点距离         //每个满足距离条件的面点的距离都要计算
                                 double pointSqDis = (laserCloudSurfLast->points[j].x - pointSel.x) *
                                                         (laserCloudSurfLast->points[j].x - pointSel.x) +
                                                     (laserCloudSurfLast->points[j].y - pointSel.y) *
@@ -449,7 +449,7 @@ int main(int argc, char **argv)
                                                         (laserCloudSurfLast->points[j].z - pointSel.z);
 
                                 // if in the same or lower scan line
-                                // 如果是同一根scan且距离最近
+                                // 如果是同一根scan且距离最近           //比较哪一个是最近的，更新一下同一线束上最小距离值和ID
                                 if (int(laserCloudSurfLast->points[j].intensity) <= closestPointScanID && pointSqDis < minPointSqDis2)
                                 {
                                     minPointSqDis2 = pointSqDis;

@@ -12,7 +12,7 @@
 //代价函数的计算模型
 struct LidarEdgeFactor		//struct的默认权限为公有public，class的默认权限为私有
 {
-	//构造函数
+	//有参构造函数
 	LidarEdgeFactor(Eigen::Vector3d curr_point_, Eigen::Vector3d last_point_a_,
 									    Eigen::Vector3d last_point_b_, double s_)
 					: curr_point(curr_point_), last_point_a(last_point_a_), 
@@ -30,7 +30,7 @@ struct LidarEdgeFactor		//struct的默认权限为公有public，class的默认�
 		Eigen::Matrix<T, 3, 1> lpb{T(last_point_b.x()), T(last_point_b.y()), T(last_point_b.z())};
 
 		Eigen::Quaternion<T> q_last_curr{q[3], q[0], q[1], q[2]};
-		Eigen::Quaternion<T> q_identity{T(1), T(0), T(0), T(0)};
+		Eigen::Quaternion<T> q_identity{T(1), T(0), T(0), T(0)};			//定义单位四元素
 		// 计算的是上一帧到当前帧的位姿变换，因此根据匀速模型，计算该点对应的位姿
 		// 这里暂时不考虑畸变，因此这里不做任何变换
 		q_last_curr = q_identity.slerp(T(s), q_last_curr);			//.slerp是四元数线性插值操作
@@ -57,6 +57,7 @@ struct LidarEdgeFactor		//struct的默认权限为公有public，class的默认�
 							(new LidarEdgeFactor(curr_point_, last_point_a_, last_point_b_, s_)));
 	}
 
+	//结构体成员变量
 	Eigen::Vector3d curr_point, last_point_a, last_point_b;
 	double s;
 };
@@ -93,7 +94,7 @@ struct LidarPlaneFactor
 		Eigen::Matrix<T, 3, 1> lp;
 		lp = q_last_curr * cp + t_last_curr;
 		// 点到平面的距离
-		residual[0] = (lp - lpj).dot(ljm);
+		residual[0] = (lp - lpj).dot(ljm);			//.dot()是点乘的操作
 
 		return true;
 	}
