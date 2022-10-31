@@ -9,7 +9,7 @@
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl_conversions/pcl_conversions.h>
 
-//代价函数的计算模型
+//代价函数的计算模型1
 struct LidarEdgeFactor		//struct的默认权限为公有public，class的默认权限为私有
 {
 	//有参构造函数
